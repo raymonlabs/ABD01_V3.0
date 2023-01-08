@@ -1,0 +1,60 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.23"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "ABD01_V3.0",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "ABD01_V3.0.elf::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ABD01_V3.0.elf-Debug-d5acc96e94fb1270a41a.json",
+					"name" : "ABD01_V3.0.elf",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0/cmake-build-debug",
+		"source" : "C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 4
+	}
+}

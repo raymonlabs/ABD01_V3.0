@@ -1,0 +1,10 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0/Core/Startup/startup_stm32f031g6ux.s
+

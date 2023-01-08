@@ -1,0 +1,5 @@
+"C:\Program Files\JetBrains\CLion 2022.2.4\bin\cmake\win\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - MinGW Makefiles" -S "C:\Users\kevin\Dropbox\Designs\1_PAPER_LLC\About_Design\PL-ABD-01\Altium Design\V3.0\ABD01_SW_V3.0" -B "C:\Users\kevin\Dropbox\Designs\1_PAPER_LLC\About_Design\PL-ABD-01\Altium Design\V3.0\ABD01_SW_V3.0\cmake-build-debug"
+-- Minimal optimization, debug info included
+-- Configuring done
+-- Generating done
+-- Build files have been written to: C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0/cmake-build-debug

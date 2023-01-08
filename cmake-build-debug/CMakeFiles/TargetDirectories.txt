@@ -1,0 +1,3 @@
+C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0/cmake-build-debug/CMakeFiles/ABD01_V3.0.elf.dir
+C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/kevin/Dropbox/Designs/1_PAPER_LLC/About_Design/PL-ABD-01/Altium Design/V3.0/ABD01_SW_V3.0/cmake-build-debug/CMakeFiles/rebuild_cache.dir
