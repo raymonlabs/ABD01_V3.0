@@ -35,10 +35,10 @@ typedef enum eLedColor
 
 typedef enum eBuzMode
 {
-	buzz_off,
-	buzz_on,
-	buzz_long,
-	buzz_short
+    buzz_off,
+    buzz_on,
+    buzz_long,
+    buzz_short
 } eBuzMode_t;
 
 #define low_vol     2048
@@ -73,18 +73,20 @@ static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 void pwmDutySet(const int duty);
 void buzzerControl(const eBuzMode_t mdoe, const int count);
+uint32_t adcRead(void);
 void ledColor(eLedColor_t ledColor);
 void ledControl(eLedStatus_t led_r, eLedStatus_t led_g, eLedStatus_t led_b);
 void boostEnable(GPIO_PinState bstStatus);
 
 void deviceInit(void);
 void readSwitchStatus(int	* const status_count,
-					  bool	* const mode_change,
-					  int	* const befor_mode);
+                      bool	* const mode_change,
+                      int	* const befor_mode);
 void ampControl(const int status);
 void chargeDetect(void);
 void fanControl(int     * const status,
-                bool    * const mode_status);
+                bool	* const mode_status,
+                bool	bat_status);
 
 /* USER CODE END PFP */
 
@@ -115,31 +117,44 @@ void pwmDutySet(const int duty)
 // Buzzer Control
 void buzzerControl(const eBuzMode_t mode, const int count)
 {
-	switch(mode)
-	{
-		case buzz_off: TIM3->CCR1 = 0; break;
-		case buzz_on: TIM3->CCR1 = 125; break;
-		case buzz_long:
-			for(int idx = 0; idx < count; idx++)
-			{
-				TIM3->CCR1 = 125;
-				HAL_Delay(2000);
-				TIM3->CCR1 = 0;
-				HAL_Delay(10);
-			}
+    switch(mode)
+    {
+        case buzz_off: TIM3->CCR1 = 0; break;
+        case buzz_on: TIM3->CCR1 = 125; break;
+        case buzz_long:
+            for(int idx = 0; idx < count; idx++)
+            {
+                TIM3->CCR1 = 125;
+                HAL_Delay(1500);
+                TIM3->CCR1 = 0;
+                HAL_Delay(10);
+            }
 
-		break;
-		case buzz_short:
-			for(int idx = 0; idx < count; idx++)
-			{
-				TIM3->CCR1 = 125;
-				HAL_Delay(300);
-				TIM3->CCR1 = 0;
-				HAL_Delay(100);
-			}
-		break;
-		default: TIM3->CCR1 = 0; break;
-	}
+            break;
+        case buzz_short:
+            for(int idx = 0; idx < count; idx++)
+            {
+                TIM3->CCR1 = 125;
+                HAL_Delay(300);
+                TIM3->CCR1 = 0;
+                HAL_Delay(100);
+            }
+            break;
+        default: TIM3->CCR1 = 0; break;
+    }
+}
+
+// ADC Read
+uint32_t adcRead(void)
+{
+    uint32_t value;
+
+    HAL_ADC_Start(&hadc);
+    HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+    HAL_Delay(100);
+    value = HAL_ADC_GetValue(&hadc);
+
+    return value;
 }
 
 // LED Color Set
@@ -199,6 +214,10 @@ void deviceInit(void)
     pwmDutySet(0);
     buzzerControl(buzz_off, 0);
 
+    // ADC START
+    HAL_ADC_Start(&hadc);
+    HAL_ADC_PollForConversion(&hadc, 10);
+
     // LED Initial
     // RED
     ledColor(color_red);
@@ -226,8 +245,8 @@ void deviceInit(void)
 }
 
 void readSwitchStatus(int	* const status_count,
-					  bool	* const mode_change,
-					  int	* const befor_mode)
+                      bool	* const mode_change,
+                      int	* const befor_mode)
 {
     int time_count = 0;
 
@@ -258,14 +277,14 @@ void readSwitchStatus(int	* const status_count,
         {
             *status_count = 1; // Mode Change
         }
-        // System Active Status
+            // System Active Status
         else
         {
             *status_count = 0; // Mode Change
         }
     }
-    // System Status Cheange Detect
-    else if((time_count < 20) && (time_count > 0))
+        // System Status Cheange Detect
+    else if((time_count < 20) && (time_count > 0) && (*status_count > 0))
     {
         if(*status_count >= 4)
         {
@@ -276,7 +295,7 @@ void readSwitchStatus(int	* const status_count,
             *status_count+=1;
         }
     }
-    // Nothing
+        // Nothing
     else
     {
         /* none */
@@ -284,30 +303,31 @@ void readSwitchStatus(int	* const status_count,
 
     if(*befor_mode != *status_count)
     {
-    	*mode_change = true;
-    	*befor_mode = *status_count;
+        *mode_change = true;
+        *befor_mode = *status_count;
     }
 }
 
 // FAN Control
 void fanControl(int     * const status,
-				bool	* const mode_status)
+                bool	* const mode_status,
+                bool	bat_status)
 {
     switch (*status)
     {
         case 0: // Device Off
-        	ledColor(color_none);
-        	boostEnable(GPIO_PIN_RESET);
-        	HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_RESET);
-        	pwmDutySet(0);
-        	if(*mode_status == true)
-        	{
-        		buzzerControl(buzz_long, 1);
-        		*mode_status = false;
-        	}
-        	break;
+            if(bat_status == true) ledColor(color_none);
+            boostEnable(GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_RESET);
+            pwmDutySet(0);
+            if(*mode_status == true)
+            {
+                buzzerControl(buzz_long, 1);
+                *mode_status = false;
+            }
+            break;
         case 1: // Device Start
-            ledColor(color_green);
+            if(bat_status == true) ledColor(color_green);
             if(*mode_status == true)
             {
                 buzzerControl(buzz_long, 1);
@@ -316,36 +336,39 @@ void fanControl(int     * const status,
             *status+=1;
             break;
         case 2: // PWM 30%
-            ledColor(color_green);
+            if(bat_status == true) ledColor(color_green);
             boostEnable(GPIO_PIN_SET);
             HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_SET);
-            pwmDutySet(50);
+            pwmDutySet(10);
+//            pwmDutySet(45);
             if(*mode_status == true)
             {
-            	buzzerControl(buzz_short, 1);
-            	*mode_status = false;
+                buzzerControl(buzz_short, 1);
+                *mode_status = false;
             }
             break;
         case 3: // PWM 50%
-            ledColor(color_green);
+            if(bat_status == true) ledColor(color_green);
             boostEnable(GPIO_PIN_SET);
             HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_SET);
-            pwmDutySet(80);
+            pwmDutySet(20);
+//            pwmDutySet(65);
             if(*mode_status == true)
             {
-            	buzzerControl(buzz_short, 2);
-            	*mode_status = false;
+                buzzerControl(buzz_short, 2);
+                *mode_status = false;
             }
             break;
         case 4: // PWM 80%
-            ledColor(color_green);
+            if(bat_status == true) ledColor(color_green);
             boostEnable(GPIO_PIN_SET);
             HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_SET);
-            pwmDutySet(100);
+            pwmDutySet(30);
+//            pwmDutySet(85);
             if(*mode_status == true)
             {
-            	buzzerControl(buzz_short, 3);
-            	*mode_status = false;
+                buzzerControl(buzz_short, 3);
+                *mode_status = false;
             }
             break;
     }
@@ -354,32 +377,35 @@ void fanControl(int     * const status,
 // Amp Control
 void ampControl(const int status)
 {
-	int ampSWstat = HAL_GPIO_ReadPin(AMP_SW_GPIO_Port,AMP_SW_Pin);
-
-    if(status > 0)
+    if ((status == 0) || (status == 1))
     {
-        if(ampSWstat == 0)
+        HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOff);
+        ampModeCount = 0;
+    }
+    else if (status > 1)
+    {
+        if (HAL_GPIO_ReadPin(AMP_SW_GPIO_Port, AMP_SW_Pin) == 0)
         {
-            while(ampSWstat == 0);
+            while (HAL_GPIO_ReadPin(AMP_SW_GPIO_Port, AMP_SW_Pin) == 0);
             ampModeCount++;
-            if(ampModeCount >= 2) ampModeCount = 0;
+            if (ampModeCount >= 2) ampModeCount = 0;
         }
 
         switch (ampModeCount)
         {
             case 0:
-                HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOn);
-            break;
+                HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOff);
+                break;
 
             case 1:
-                HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOff);
-            break;
+                HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOn);
+                break;
         }
     }
     else
     {
-        ampModeCount = 1;
         HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOff);
+        ampModeCount = 0;
     }
 }
 
@@ -414,64 +440,72 @@ void chargeDetect(void)
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
+    /* USER CODE BEGIN 1 */
 
-  int system_status = 0; // System Status Variable
-  bool mode_status = false;
-  int befor_mode = 0;
-  /* USER CODE END 1 */
+    int system_status = 0; // System Status Variable
+    bool mode_status = false;
+    int befor_mode = 0;
+    int adc_read_count = 0;
+    bool bat_status = true; // true: normal, false: low Bat
+    /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
-  /* USER CODE BEGIN Init */
+    /* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+    /* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    /* Configure the system clock */
+    SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+    /* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+    /* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_TIM3_Init();
-  MX_TIM14_Init();
-  MX_ADC_Init();
-  /* USER CODE BEGIN 2 */
+    /* Initialize all configured peripherals */
+    MX_GPIO_Init();
+    MX_TIM3_Init();
+    MX_TIM14_Init();
+    MX_ADC_Init();
+    /* USER CODE BEGIN 2 */
 
-  deviceInit(); // Device Initial
-  HAL_Delay(50);
-//  HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_SET);
-//  HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_RESET);
-//  HAL_GPIO_WritePin(LED_CHG_GPIO_Port, LED_CHG_Pin, GPIO_PIN_SET);
-//  HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, ampOn);
+    deviceInit(); // Device Initial
+    HAL_Delay(50);
 
-  /* USER CODE END 2 */
+    /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
     while (1)
     {
-    /* USER CODE END WHILE */
+        /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
+        /* USER CODE BEGIN 3 */
         chargeDetect();
+        adc_read_count++;
+        if(adc_read_count >= 5000)
+        {
+            if(adcRead() < low_vol)
+            {
+                bat_status = false;
+                ledColor(color_magenta);
+            }
+            else bat_status = true;
+            adc_read_count = 0;
+        }
         readSwitchStatus(&system_status,
-        				 &mode_status,
-						 &befor_mode);
-        fanControl(&system_status, &mode_status);
-        ampControl(system_status);
-    	boostEnable(GPIO_PIN_SET);
-//    	HAL_GPIO_TogglePin(AMP_SD_GPIO_Port, AMP_SD_Pin);
-//    	HAL_Delay(2500);
+                         &mode_status,
+                         &befor_mode);
+        fanControl(&system_status, &mode_status, bat_status);
+        ampControl(&system_status);
+        boostEnable(GPIO_PIN_SET);
+        HAL_Delay(1);
     }
 
-  /* USER CODE END 3 */
+    /* USER CODE END 3 */
 }
 
 /**
@@ -480,35 +514,33 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSI14;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSI14State = RCC_HSI14_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.HSI14CalibrationValue = 16;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /** Initializes the RCC Oscillators according to the specified parameters
+    * in the RCC_OscInitTypeDef structure.
+    */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+    {
+        Error_Handler();
+    }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    /** Initializes the CPU, AHB and APB buses clocks
+    */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                                  |RCC_CLOCKTYPE_PCLK1;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+    {
+        Error_Handler();
+    }
 }
 
 /**
@@ -519,49 +551,49 @@ void SystemClock_Config(void)
 static void MX_ADC_Init(void)
 {
 
-  /* USER CODE BEGIN ADC_Init 0 */
+    /* USER CODE BEGIN ADC_Init 0 */
 
-  /* USER CODE END ADC_Init 0 */
+    /* USER CODE END ADC_Init 0 */
 
-  ADC_ChannelConfTypeDef sConfig = {0};
+    ADC_ChannelConfTypeDef sConfig = {0};
 
-  /* USER CODE BEGIN ADC_Init 1 */
+    /* USER CODE BEGIN ADC_Init 1 */
 
-  /* USER CODE END ADC_Init 1 */
+    /* USER CODE END ADC_Init 1 */
 
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-  */
-  hadc.Instance = ADC1;
-  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-  hadc.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
-  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  hadc.Init.LowPowerAutoWait = DISABLE;
-  hadc.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc.Init.ContinuousConvMode = DISABLE;
-  hadc.Init.DiscontinuousConvMode = DISABLE;
-  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc.Init.DMAContinuousRequests = DISABLE;
-  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  if (HAL_ADC_Init(&hadc) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+    */
+    hadc.Instance = ADC1;
+    hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+    hadc.Init.Resolution = ADC_RESOLUTION_12B;
+    hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+    hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+    hadc.Init.LowPowerAutoWait = DISABLE;
+    hadc.Init.LowPowerAutoPowerOff = DISABLE;
+    hadc.Init.ContinuousConvMode = DISABLE;
+    hadc.Init.DiscontinuousConvMode = DISABLE;
+    hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+    hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+    hadc.Init.DMAContinuousRequests = DISABLE;
+    hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+    if (HAL_ADC_Init(&hadc) != HAL_OK)
+    {
+        Error_Handler();
+    }
 
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_7;
-  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
-  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC_Init 2 */
+    /** Configure for the selected ADC regular channel to be converted.
+    */
+    sConfig.Channel = ADC_CHANNEL_7;
+    sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+    sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+    if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN ADC_Init 2 */
 
-  /* USER CODE END ADC_Init 2 */
+    /* USER CODE END ADC_Init 2 */
 
 }
 
@@ -573,54 +605,54 @@ static void MX_ADC_Init(void)
 static void MX_TIM3_Init(void)
 {
 
-  /* USER CODE BEGIN TIM3_Init 0 */
+    /* USER CODE BEGIN TIM3_Init 0 */
 
-  /* USER CODE END TIM3_Init 0 */
+    /* USER CODE END TIM3_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
+    TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+    TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE BEGIN TIM3_Init 1 */
+    /* USER CODE BEGIN TIM3_Init 1 */
 
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 9;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 251;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 125;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM3_Init 2 */
+    /* USER CODE END TIM3_Init 1 */
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 9;
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 251;
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+    if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 125;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN TIM3_Init 2 */
 
-  /* USER CODE END TIM3_Init 2 */
-  HAL_TIM_MspPostInit(&htim3);
+    /* USER CODE END TIM3_Init 2 */
+    HAL_TIM_MspPostInit(&htim3);
 
 }
 
@@ -632,41 +664,41 @@ static void MX_TIM3_Init(void)
 static void MX_TIM14_Init(void)
 {
 
-  /* USER CODE BEGIN TIM14_Init 0 */
+    /* USER CODE BEGIN TIM14_Init 0 */
 
-  /* USER CODE END TIM14_Init 0 */
+    /* USER CODE END TIM14_Init 0 */
 
-  TIM_OC_InitTypeDef sConfigOC = {0};
+    TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE BEGIN TIM14_Init 1 */
+    /* USER CODE BEGIN TIM14_Init 1 */
 
-  /* USER CODE END TIM14_Init 1 */
-  htim14.Instance = TIM14;
-  htim14.Init.Prescaler = 3;
-  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim14.Init.Period = 99;
-  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim14) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim14, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM14_Init 2 */
+    /* USER CODE END TIM14_Init 1 */
+    htim14.Instance = TIM14;
+    htim14.Init.Prescaler = 3;
+    htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim14.Init.Period = 99;
+    htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    if (HAL_TIM_PWM_Init(&htim14) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 0;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(&htim14, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN TIM14_Init 2 */
 
-  /* USER CODE END TIM14_Init 2 */
-  HAL_TIM_MspPostInit(&htim14);
+    /* USER CODE END TIM14_Init 2 */
+    HAL_TIM_MspPostInit(&htim14);
 
 }
 
@@ -677,61 +709,61 @@ static void MX_TIM14_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
+    /* GPIO Ports Clock Enable */
+    __HAL_RCC_GPIOF_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_CHG_GPIO_Port, LED_CHG_Pin, GPIO_PIN_RESET);
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(LED_CHG_GPIO_Port, LED_CHG_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_SET);
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(AMP_SD_GPIO_Port, AMP_SD_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, BST_EN_Pin|LED_G_Pin|LED_R_Pin|LED_B_Pin, GPIO_PIN_RESET);
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(GPIOA, BST_EN_Pin|LED_G_Pin|LED_R_Pin|LED_B_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : FAN_SW_Pin */
-  GPIO_InitStruct.Pin = FAN_SW_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(FAN_SW_GPIO_Port, &GPIO_InitStruct);
+    /*Configure GPIO pin : FAN_SW_Pin */
+    GPIO_InitStruct.Pin = FAN_SW_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(FAN_SW_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LED_CHG_Pin */
-  GPIO_InitStruct.Pin = LED_CHG_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_CHG_GPIO_Port, &GPIO_InitStruct);
+    /*Configure GPIO pin : LED_CHG_Pin */
+    GPIO_InitStruct.Pin = LED_CHG_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(LED_CHG_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : CHG_STAT_Pin */
-  GPIO_InitStruct.Pin = CHG_STAT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(CHG_STAT_GPIO_Port, &GPIO_InitStruct);
+    /*Configure GPIO pin : CHG_STAT_Pin */
+    GPIO_InitStruct.Pin = CHG_STAT_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(CHG_STAT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : AMP_SD_Pin BST_EN_Pin LED_G_Pin LED_R_Pin
-                           LED_B_Pin */
-  GPIO_InitStruct.Pin = AMP_SD_Pin|BST_EN_Pin|LED_G_Pin|LED_R_Pin
+    /*Configure GPIO pins : AMP_SD_Pin BST_EN_Pin LED_G_Pin LED_R_Pin
+                             LED_B_Pin */
+    GPIO_InitStruct.Pin = AMP_SD_Pin|BST_EN_Pin|LED_G_Pin|LED_R_Pin
                           |LED_B_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : AMP_SW_Pin */
-  GPIO_InitStruct.Pin = AMP_SW_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(AMP_SW_GPIO_Port, &GPIO_InitStruct);
+    /*Configure GPIO pin : AMP_SW_Pin */
+    GPIO_InitStruct.Pin = AMP_SW_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(AMP_SW_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : VBUS_DET_Pin */
-  GPIO_InitStruct.Pin = VBUS_DET_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(VBUS_DET_GPIO_Port, &GPIO_InitStruct);
+    /*Configure GPIO pin : VBUS_DET_Pin */
+    GPIO_InitStruct.Pin = VBUS_DET_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(VBUS_DET_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -745,13 +777,13 @@ static void MX_GPIO_Init(void)
   */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
+    /* USER CODE BEGIN Error_Handler_Debug */
     /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
     while (1)
     {
     }
-  /* USER CODE END Error_Handler_Debug */
+    /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
